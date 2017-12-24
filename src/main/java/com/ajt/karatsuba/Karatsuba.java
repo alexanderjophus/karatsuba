@@ -1,108 +1,89 @@
 package com.ajt.karatsuba;
 
 import com.ajt.karatsuba.utils.LongUtils;
-import org.apache.log4j.Logger;
 
 import java.util.Collections;
 
 import static java.lang.Long.max;
 
 class Karatsuba {
-    final private Logger LOGGER = Logger.getLogger(this.getClass());
-    private final long num1;
-    private final long num2;
-    private Karatsuba kh;
-    private Karatsuba kl;
-    private Karatsuba km;
-    private NumberSplit numberSplitNum1;
-    private NumberSplit numberSplitNum2;
-    private long highRes;
-    private long lowRes;
-    private long midRes;
-    private long retValue;
-    private long mid;
+    private long returnValue;
+    private StringBuilder sb;
 
-    Karatsuba(long num1, long num2) {
-        this.num1 = num1;
-        this.num2 = num2;
+    private Karatsuba(final long returnValue, final StringBuilder sb) {
+        this.returnValue = returnValue;
+        this.sb = sb;
     }
 
-    long multiply() {
-        if (this.num1 < 10 || this.num2 < 10) return this.num1*this.num2;
-        LOGGER.info("Num1: " + this.num1);
-        LOGGER.info("Num2: " + this.num2);
+    // FIXME: parameter should include the output format, string builder, depth
+    // TODO: Look at logging static methods
+    private static Karatsuba multiply(final long num1, final long num2, final StringBuilder sb, final int depth) {
+        if (num1 < 10 || num2 < 10) return new Karatsuba(num1*num2, sb);
 
-        mid = max(LongUtils.getBase10Length(this.num1), LongUtils.getBase10Length(this.num2))/2;
-        LOGGER.trace("Mid: " + mid);
-
-        numberSplitNum1 = NumberSplit.getHighLow(this.num1, mid);
-        LOGGER.trace("High: " + this.numberSplitNum1.getHigh() + ", Low: " + this.numberSplitNum1.getLow());
-
-        numberSplitNum2 = NumberSplit.getHighLow(this.num2, mid);
-        LOGGER.trace("High: " + this.numberSplitNum2.getHigh() + ", Low: " + this.numberSplitNum2.getLow());
-
-        kh = new Karatsuba(this.numberSplitNum1.getHigh(), this.numberSplitNum2.getHigh());
-        kl = new Karatsuba(this.numberSplitNum1.getLow(), this.numberSplitNum2.getLow());
-        km = new Karatsuba(this.numberSplitNum1.getSummation(),this.numberSplitNum2.getSummation());
-        highRes = kh.multiply();
-        lowRes = kl.multiply();
-        midRes = km.multiply() - (highRes + lowRes);
-        LOGGER.info("High Result: " + highRes + "* 10 ^ " + mid*2);
-        LOGGER.info("Mid Result: " + midRes + "* 10 ^ " + mid);
-        LOGGER.info("Low Result: " + lowRes + "* 10 ^ 0");
-
-        retValue = (highRes * (long) Math.pow(10, mid * 2)) + (midRes * (long) Math.pow(10, mid)) + lowRes;
-        LOGGER.info("Result: " + retValue);
-        return retValue;
-    }
-
-    // TODO Look into way of enforcing this dependency
-    /**
-     * Call multiply first
-     */
-    public String output() {
-        return output(new StringBuilder(), 0).toString();
-    }
-
-    // TODO: Think about taking in formatter to allow for different styles of output
-    // i.e. HTML formatter allowing collapsing of nested calls
-    // i.e. LaTeX formatter
-    private StringBuilder output(final StringBuilder sb, final int depth) {
-        multiply();
-        if (this.num1 < 10 || this.num2 < 10) return sb;
         sb.append(lineBuilder(depth,"Number 1: ", num1));
         sb.append(lineBuilder(depth,"Number 2: ", num2));
 
-        sb.append(lineBuilder(depth,"Number 1 High: ", this.numberSplitNum1.getHigh()));
-        sb.append(lineBuilder(depth,"Number 2 High: ", this.numberSplitNum2.getHigh()));
-        kh.output(sb, depth+1);
+        long midPower = (long) Math.ceil((double)max(LongUtils.getBase10Length(num1), LongUtils.getBase10Length(num2))/2);
+        NumberSplit numberSplitNum1 = NumberSplit.getHighLow(num1, midPower);
+        NumberSplit numberSplitNum2 = NumberSplit.getHighLow(num2, midPower);
+
+        // TODO: Extract these into a common method passing in the high or low values - current violation of DRY
+        long highRes = getHighRes(numberSplitNum1, numberSplitNum2, sb, depth);
+        long lowRes = getLowRes(numberSplitNum1, numberSplitNum2, sb, depth);
+        long midRes = getMidRes(numberSplitNum1, numberSplitNum2, sb, depth, highRes, lowRes);
+
+        long retValue = (highRes * (long) Math.pow(10, midPower * 2)) + (midRes * (long) Math.pow(10, midPower)) + lowRes;
+        sb.append(lineBuilder(depth, "Returning value: (", highRes, "*10^", midPower*2, ") + (", midRes, "*10^", midPower, ") + ", lowRes, " = ", retValue));
+        return new Karatsuba(retValue, sb);
+    }
+
+    private static long getHighRes(NumberSplit numberSplitNum1, NumberSplit numberSplitNum2, StringBuilder sb, int depth) {
+        sb.append(lineBuilder(depth,"Number 1 High: ", numberSplitNum1.getHigh()));
+        sb.append(lineBuilder(depth,"Number 2 High: ", numberSplitNum2.getHigh()));
+        long highRes = multiply(numberSplitNum1.getHigh(), numberSplitNum2.getHigh(), sb, depth+1).getReturnValue();
         sb.append(lineBuilder(depth,
-                "High Value [", this.numberSplitNum1.getHigh(), "*", this.numberSplitNum2.getHigh(), "*10^", this.mid*2, "]: ", this.highRes));
+                "High Value [", numberSplitNum1.getHigh(), "*", numberSplitNum2.getHigh(), "]: ", highRes));
+        return highRes;
+    }
 
-
-        sb.append(lineBuilder(depth,"Number 1 Low: ", this.numberSplitNum1.getLow()));
-        sb.append(lineBuilder(depth,"Number 2 Low: ", this.numberSplitNum2.getLow()));
-        kl.output(sb, depth+1);
+    private static long getLowRes(NumberSplit numberSplitNum1, NumberSplit numberSplitNum2, StringBuilder sb, int depth) {
+        sb.append(lineBuilder(depth,"Number 1 Low: ", numberSplitNum1.getLow()));
+        sb.append(lineBuilder(depth,"Number 2 Low: ", numberSplitNum2.getLow()));
+        long lowRes = multiply(numberSplitNum1.getLow(), numberSplitNum2.getLow(), sb, depth+1).getReturnValue();
         sb.append(lineBuilder(depth,
-                "Low Value [", this.numberSplitNum1.getLow(), "*", this.numberSplitNum2.getLow(), "]: ", this.lowRes, "*10^0"));
+                "Low Value [", numberSplitNum1.getLow(), "*", numberSplitNum2.getLow(), "]: ", lowRes));
+        return lowRes;
+    }
 
-
-        sb.append(lineBuilder(depth,"Number 1 Summation: (", this.numberSplitNum1.getHigh(), "+",
-                this.numberSplitNum1.getLow(), ") ", this.numberSplitNum1.getSummation()));
-        sb.append(lineBuilder(depth,"Number 2 Summation: (", this.numberSplitNum2.getHigh(), "+",
-                this.numberSplitNum2.getLow(), ") ", this.numberSplitNum2.getSummation()));
-        km.output(sb, depth+1);
+    private static long getMidRes(NumberSplit numberSplitNum1, NumberSplit numberSplitNum2, StringBuilder sb, int depth, long highRes, long lowRes) {
+        sb.append(lineBuilder(depth,"Number 1 Summation: (", numberSplitNum1.getHigh(), "+",
+                numberSplitNum1.getLow(), ") ", numberSplitNum1.getSummation()));
+        sb.append(lineBuilder(depth,"Number 2 Summation: (", numberSplitNum2.getHigh(), "+",
+                numberSplitNum2.getLow(), ") ", numberSplitNum2.getSummation()));
+        long midRes = multiply(numberSplitNum1.getSummation(),numberSplitNum2.getSummation(),sb, depth+1).getReturnValue() - (highRes + lowRes);
         sb.append(lineBuilder(depth,
-                "Mid Value [(", this.numberSplitNum1.getSummation(), "*", this.numberSplitNum2.getSummation(),
-                ") - (", this.highRes, "+", this.lowRes, ")]: ", this.midRes, "*10^", this.mid));
+                "Mid Value [(", numberSplitNum1.getSummation(), "*", numberSplitNum2.getSummation(),
+                ") - (", highRes, "+", lowRes, ")]: ", midRes));
+        return midRes;
+    }
 
-        sb.append(lineBuilder(depth, "Returning value: ", this.retValue));
+    static Karatsuba multiply(final long num1, final long num2) {
+        return multiply(num1, num2, new StringBuilder(), 0);
+    }
+
+    long getReturnValue() {
+        return returnValue;
+    }
+
+    StringBuilder getStringBuilder() {
         return sb;
     }
 
-    private String lineBuilder(final int depth, final Object... input) {
+
+    // TODO: Look into polymorphism to allow multiple output formats
+    private static String lineBuilder(final int depth, final Object... input) {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.join("", Collections.nCopies(depth, ">")));
+        sb.append(String.join("", Collections.nCopies(depth, "\t")));
         for (Object i: input) {
             sb.append(i.toString());
         }

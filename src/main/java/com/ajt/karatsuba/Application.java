@@ -2,6 +2,8 @@ package com.ajt.karatsuba;
 
 public class Application {
     public static void main(String[] args) {
-        System.out.println(new Karatsuba(16777216, 274877906944L).output());
+        final Karatsuba karatsuba = Karatsuba.multiply(128, 256);
+        System.out.println("Return value is: " + karatsuba.getReturnValue());
+        System.out.println(karatsuba.getStringBuilder().toString());
     }
 }
